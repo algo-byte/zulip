@@ -1600,7 +1600,7 @@ class UserBaseSettings(models.Model):
     )
 
     notification_setting_types = {
-        **notification_settings_legacy
+        **notification_settings_legacy,
     }  # Add new notifications settings here.
 
     # Define the types of the various automatically managed properties
@@ -2202,6 +2202,7 @@ class PreregistrationUser(models.Model):
 
     id: int = models.AutoField(auto_created=True, primary_key=True, verbose_name="ID")
     email: str = models.EmailField()
+    send_pm_to_referrer_on_signup: bool = models.BooleanField(default=True)
 
     confirmation = GenericRelation("confirmation.Confirmation", related_query_name="prereg_user")
     # If the pre-registration process provides a suggested full name for this user,

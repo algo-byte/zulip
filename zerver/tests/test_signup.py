@@ -42,7 +42,7 @@ from zerver.actions.realm_settings import (
     do_set_realm_property,
     do_set_realm_user_default_setting,
 )
-from zerver.actions.user_settings import do_change_full_name
+from zerver.actions.user_settings import do_change_full_name, do_change_user_setting
 from zerver.actions.users import change_user_is_active, do_change_user_role, do_deactivate_user
 from zerver.context_processors import common_context
 from zerver.decorator import do_two_factor_login
@@ -1630,6 +1630,48 @@ class InviteUserTest(InviteUserBase):
         self.assertTrue(
             signups_stream_msg.content.startswith(
                 f"@_**alice_zulip.com|{invitee_profile.id}** just signed up",
+            )
+        )
+
+        self.assertEqual(invitee_msg.sender.email, "welcome-bot@zulip.com")
+        self.assertTrue(invitee_msg.content.startswith("Hello, and welcome to Zulip!"))
+        self.assertNotIn("demo organization", invitee_msg.content)
+
+        # when send_pm_to_referrer_on_signup is set to False
+        secret_msg_id = self.send_stream_message(
+            self.example_user("hamlet"),
+            private_stream_name,
+            topic_name="Secret topic",
+            content="Secret message",
+        )
+        invitee = self.nonreg_email("bob")
+        self.assert_json_success(self.invite(invitee, [private_stream_name, "Denmark"]))
+        self.assertTrue(find_key_by_email(invitee))
+
+        prereg_user = PreregistrationUser.objects.get(email=invitee)
+        do_change_user_setting(
+            prereg_user,
+            "send_pm_to_referrer_on_signup",
+            False,
+            acting_user=prereg_user,
+        )
+        self.submit_reg_form_for_user(invitee, "password")
+        invitee_profile = self.nonreg_user("bob")
+        invitee_msg_ids = [
+            um.message_id for um in UserMessage.objects.filter(user_profile=invitee_profile)
+        ]
+        self.assertTrue(public_msg_id in invitee_msg_ids)
+        self.assertFalse(secret_msg_id in invitee_msg_ids)
+        self.assertFalse(invitee_profile.is_realm_admin)
+
+        invitee_msg, signups_stream_msg, secret_msg = Message.objects.all().order_by("-id")[0:3]
+
+        self.assertEqual(secret_msg.id, secret_msg_id)
+
+        self.assertEqual(signups_stream_msg.sender.email, "notification-bot@zulip.com")
+        self.assertTrue(
+            signups_stream_msg.content.startswith(
+                f"@_**bob_zulip.com|{invitee_profile.id}** just signed up",
             )
         )
 
